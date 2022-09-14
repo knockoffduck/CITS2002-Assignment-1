@@ -1,415 +1,478 @@
+// CITS2002 PROJECT 1 2022
+// STUDENT 1: 23234683 TRINH LINH
+// STUDENT 2: 23147438 NGUYEN THAI HOANG LONG
+
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdbool.h>
 #include <unistd.h>
 
-#define max_minutes 60
-#define max_hours 24
-#define max_days 7
-#define month_amt 12
-#define current_year 2022
-#define line_size 100
-#define command_size 40
+#define MAX_COMMANDS 20
+#define MAX_CHAR 100
 
-typedef struct
+struct Crontab
 {
-    int min;
-    int hr;
-    int day;
-    int month;
-    int dayOfWeek;
-    char command[42];
-    int duration;
-    int counter;
-    bool state;
-    int remainingTime;
-} Command;
+    char minute[MAX_CHAR];
+    char hour[MAX_CHAR];
+    char day[MAX_CHAR];
+    char month[MAX_CHAR];
+    char date[MAX_CHAR];
+    char command[41];
+};
 
-typedef struct
+struct Estimate
 {
-    char command[42];
-    int remainingTime;
-    bool state;
-} Execute;
+    char command[41];
+    char min[MAX_CHAR];
+};
 
-void red()
+FILE *openfile(char filename[])
 {
-    printf("\033[1;31m");
-}
+    // If file is able to be opened, return the opened file
 
-void reset()
-{
-    printf("\033[0m");
-}
-
-void green()
-{
-    printf("\033[0;32m");
-}
-
-int rangeChecker(int num, int min, int max)
-{
-    if ((num - min) * (num - max) <= 0)
+    FILE *files = fopen(filename, "r");
+    if (files == NULL)
     {
-        return 0;
-    }
-    else
-    {
-        printf("%d is an invalid month\n", num);
+        fprintf(stderr, "File does not exist or cannot be opened '%s'\n", filename);
         exit(EXIT_FAILURE);
     }
+    return files;
 }
 
-int monthNametoInt(char *month)
+int fileProcessCron(FILE *crontab, struct Crontab crontab_data[MAX_COMMANDS])
 {
-    int m;
+    int line = 0; // keeps track of every line in file and also act as pointer for struct idex
+    int j = 0;    // keeps track of the individual character in a line
+    int file_size = 0;
 
-    char *months[12] = {"jan", "feb", "mar",
-                        "apr", "may", "jun",
-                        "jul", "aug", "sep",
-                        "oct", "nov", "dec"};
-    for (int i = 0; i < sizeof(months); i++)
+    char lines[MAX_CHAR];
+
+    while (fgets(lines, sizeof lines, crontab) != NULL)
     {
-        if (strcmp(month, months[i]) == 0)
-            return i;
+        char cmin[MAX_CHAR];
+        char chour[MAX_CHAR];
+        char cday[MAX_CHAR];
+        char cmonth[MAX_CHAR];
+        char cdate[MAX_CHAR];
+        char cmd[41];
+
+        while (isspace(lines[j]))
+        { // if the character is a white space, continute to examine next character
+            j++;
+        }
+
+        if (lines[j] != '#')
+        { // if the first nons-space character is not a # then store data into struct
+            sscanf(lines, "%s %s %s %s %s %s",
+                   cmin, chour, cday, cmonth, cdate, cmd);
+            strcpy(crontab_data[line].minute, cmin);
+            strcpy(crontab_data[line].hour, chour);
+            strcpy(crontab_data[line].day, cday);
+            strcpy(crontab_data[line].month, cmonth);
+            strcpy(crontab_data[line].date, cdate);
+            strcpy(crontab_data[line].command, cmd);
+            line++;
+            file_size++;
+        }
+    }
+    return file_size;
+}
+
+int fileProcessEstimate(FILE *estimate, struct Estimate est_data[MAX_COMMANDS])
+{
+    int line = 0; // keeps track of every line in file and act as pointer for struct index
+    int j = 0;    // keeps track of the individual character in a line
+    int file_size = 0;
+
+    char lines[MAX_CHAR];
+
+    while (fgets(lines, sizeof lines, estimate) != NULL)
+    {
+        char cmd[41];
+        char minute[MAX_CHAR];
+
+        while (isspace(lines[j]))
+        { // if the character is a white space, continute to examine next character
+            j++;
+        }
+
+        if (lines[j] != '#')
+        { // if the first nons-space character is not a # then store data into struct
+            sscanf(lines, "%s %s",
+                   cmd, minute);
+            strcpy(est_data[line].command, cmd);
+            strcpy(est_data[line].min, minute);
+            line++;
+            file_size++;
+        }
+    }
+    return file_size;
+}
+
+int daysOfMonth(int month)
+{
+    // returns max number of days in month;
+    int days;
+    switch (month)
+    {
+    case 0:
+    case 2:
+    case 4:
+    case 6:
+    case 7:
+    case 9:
+    case 11:
+        days = 31;
+        break;
+    case 3:
+    case 5:
+    case 8:
+    case 10:
+        days = 30;
+        break;
+    case 1:
+        days = 28;
+        break;
+    default:
+        fprintf(stderr, "Month %i is an invalid input\n", month);
+        exit(EXIT_FAILURE);
+    }
+    return days;
+}
+
+int dayToInt(char *day)
+{
+    // if given a string (mon-sun) convert that to a number
+    int num = 0;
+    if ((isnumber(*day)))
+    {
+        if (atoi(day) < 7)
+        {
+            num = atoi(day); // if it is already an int that is less than 7, return that
+            return num;
+        }
     }
 
-    printf("%s INVALID MONTH\n", month);
+    else if (strcmp(day, "*") == 0)
+    {
+        return -1;
+    }
+
+    else
+    {
+        char *days[7] = {"sun", "mon", "tue", "wed", "thu", "fri", "sat"};
+        for (int i = 0; i < 7; i++)
+        {
+            if ((strcmp(days[i], day)) == 0)
+            { // Compares whether given day is a valid day (or substring)
+                num = i;
+                return num;
+            }
+        }
+    }
+
+    fprintf(stderr, "Day provided is an invalid input\n");
     exit(EXIT_FAILURE);
 }
 
-char dayNametoInt(char *string)
+int monthToInt(char *month)
 {
-    char *temp;
-    for (int i = 0; string[i] != '\0'; i++)
+    // if given a string (jan-dec) convert that to a number
+    int num;
+    if (isnumber(*month))
     {
-        string[i] = tolower(string[i]);
-    }
-
-    if (strcmp(string, "sun") == 0)
-        string = "0";
-
-    if (strcmp(string, "mon") == 0)
-        string = "1";
-
-    if (strcmp(string, "tue") == 0)
-        string = "2";
-
-    if (strcmp(string, "wed") == 0)
-        string = "3";
-
-    if (strcmp(string, "thu") == 0)
-        string = "4";
-
-    if (strcmp(string, "fri") == 0)
-        string = "5";
-
-    if (strcmp(string, "sat") == 0)
-        string = "6";
-
-    return strtol(string, &temp, 10);
-}
-
-int find_max_value(float array[], int length)
-{
-    // set the value of index 0 as the "current max value"
-    float max_value = array[0];
-    // the same goes for the index number
-    int max_index = 0;
-
-    // go through the array
-    for (int i = 1; i < length; i++)
-    {
-        // if the next index's value is greater than the "current max value"
-        // update the max_value and max_index
-        if (array[i] > max_value)
+        if (atoi(month) < 11)
         {
-            max_value = array[i];
-            max_index = i;
-        }
-    }
-    return max_index;
-}
-
-int getDayOfWeek(int month, int date)
-{
-    int day = 0;
-    int year = current_year;
-    month += 1;
-    int year_temp = year - (14 - month) / 12;
-    int x = year_temp + year_temp / 4 - year_temp / 100 + year_temp / 400;
-    int month_temp = month + 12 * ((14 - month) / 12) - 2;
-    day = (date + x + 31 * month_temp / 12) % 7;
-    return day;
-}
-// Function to return the amount of days in given month
-int daysInMonthAmt(int month)
-{
-    int daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    int daysAmt;
-    daysAmt = daysInMonth[month];
-    return daysAmt;
-}
-
-int amtOfLines(char *filename)
-{
-    FILE *pFile = fopen(filename, "r");
-    int lines = 0;
-    char *temp;
-    if (!pFile)
-    {
-        printf("error loading file");
-        exit(EXIT_FAILURE);
-    }
-    fseek(pFile, 0, SEEK_END);
-    int size = ftell(pFile);
-    rewind(pFile);
-    char *buffer = (char *)malloc(sizeof(char) * (size + 1));
-
-    while (fgets(buffer, (size + 1), pFile) != NULL)
-    {
-        if (buffer[0] == '#')
-            continue;
-        lines++;
-    }
-    return lines;
-}
-
-int parseEstimate(char *filename, char *stringCommand)
-{
-    FILE *pFile = fopen(filename, "r");
-
-    if (!pFile)
-    {
-        printf("error loading file '%s'\n", filename);
-        exit(EXIT_FAILURE);
-    }
-    fseek(pFile, 0, SEEK_END);
-
-    int size = ftell(pFile);
-
-    rewind(pFile);
-
-    char *buffer = (char *)malloc(sizeof(char) * (size + 1));
-    while (fgets(buffer, (size + 1), pFile) != NULL)
-    {
-        char *token;
-        char *temp;
-        char *temp2;
-        char *strNum;
-
-        temp = buffer;
-        if (buffer[0] == '#')
-            continue;
-
-        token = strtok(temp, " ");
-        temp = NULL;
-        if (strncmp(stringCommand, token, sizeof(&token)) == 0)
-        {
-
-            token = strtok(NULL, " ");
-            long int num = strtol(token, &temp2, 10);
+            num = atoi(month);
             return num;
         }
-        token = strtok(NULL, " ");
     }
-    return 0;
-}
-
-void estimateCron(int month, char *cronFile, char *estFile)
-{
-    int linesAmt = amtOfLines(cronFile);
-    Command commands[linesAmt];
-    Execute *status = (Execute *)malloc(sizeof *status);
-
-    FILE *pFile = fopen(cronFile, "r");
-
-    if (!pFile)
+    else if (strcmp(month, "*") == 0)
     {
-        printf("error loading file '%s'\n", cronFile);
-        exit(EXIT_FAILURE);
+        return -1;
     }
-
-    char buffer[line_size];
-
-    int i = 0;
-    int columns;
-    while (fgets(buffer, sizeof buffer, pFile) != NULL)
-    {
-        char strMin[command_size];
-        char strHr[command_size];
-        char strDate[command_size];
-        char strMonth[command_size];
-        char strDay[command_size];
-        char strCommand[command_size];
-        char *temp2;
-
-        columns = sscanf(buffer, "%s %s %s %s %s %s", strMin, strHr, strDate, strMonth, strDay, strCommand);
-        if (columns == 6 && buffer[0] != '#')
-        {
-            strcpy(commands[i].command, strCommand);
-            if (strcmp(strMin, "*") != 0)
-                commands[i].min = strtol(strMin, &temp2, 10);
-            else
-                commands[i].min = -1;
-            if (strcmp(strHr, "*") != 0)
-                commands[i].hr = strtol(strHr, &temp2, 10);
-            else
-                commands[i].hr = -1;
-            if (strcmp(strDate, "*") != 0)
-                commands[i].day = strtol(strDate, &temp2, 10);
-            else
-                commands[i].day = 0;
-            if (strcmp(strMonth, "*") != 0)
-                commands[i].month = strtol(strMonth, &temp2, 10);
-            else
-                commands[i].month = -1;
-            if (strcmp(strDay, "*") != 0)
-                commands[i].dayOfWeek = dayNametoInt(strDay);
-            else
-                commands[i].dayOfWeek = -1;
-            if (i < linesAmt)
-                i++;
-        }
-    }
-    fclose(pFile);
-
-    for (int i = 0; i < linesAmt; i++)
-    {
-        commands[i].duration = parseEstimate(estFile, commands[i].command);
-    }
-    int days = daysInMonthAmt(month);
-
-    int minute;
-    int minCount;
-    int hour;
-    int date = 1;
-
-    hour = minute = 0;
-    int amtProcesses = 0;
-    int queue = 0;
-    int maxQueue = 0;
-    int weekday = getDayOfWeek(month, date);
-    for (int i = 0; i < linesAmt; i++)
-    {
-        commands[i].counter = 0;
-    }
-
-    while (1)
-    {
-        minute++;
-
-        if (minute == max_minutes)
-        {
-            hour += 1;
-            minute = 0;
-        }
-        if (hour == max_hours)
-        {
-            date++;
-            weekday++;
-            hour = 0;
-            minute = 0;
-        }
-        if (weekday == max_days)
-        {
-            weekday = 0;
-        }
-
-        for (int i = 0; i < linesAmt; i++)
-        {
-
-            if (queue > maxQueue)
-                maxQueue = queue;
-
-            if ((minute == commands[i].min || commands[i].min == -1) &&
-                (hour == commands[i].hr || commands[i].hr == -1) &&
-                (date == commands[i].day || commands[i].day == 0) &&
-                (month == commands[i].month || commands[i].month == -1) &&
-                (weekday == commands[i].dayOfWeek || commands[i].dayOfWeek == -1))
-            {
-                queue++;
-                strcpy(status[amtProcesses].command, commands[i].command);
-                status[amtProcesses].state = true;
-                status[amtProcesses].remainingTime = commands[i].duration;
-                commands[i].counter++;
-                green();
-                printf("@%02d:%02d\t%02d/%02d\tinvoke\t(pid=%d, running=%d)\t\t%s\n",
-                       hour,
-                       minute,
-                       date,
-                       month,
-                       amtProcesses,
-                       queue,
-                       commands[i].command);
-                reset();
-                amtProcesses++;
-            }
-        }
-        for (int j = 0; j < amtProcesses; j++)
-        {
-            if (status[j].state == true &&
-                status[j].remainingTime > 0)
-                status[j].remainingTime--;
-            else if (status[j].state == true &&
-                     status[j].remainingTime == 0)
-            {
-                if (queue > 0)
-                    queue--;
-                status[j].state = false;
-                red();
-                printf("@%02d:%02d\t%02d/%02d\thas-terminated\t(pid=%d, running=%d)\t%s\n", hour, minute, date, month, amtProcesses, queue, status[j].command);
-                reset();
-            }
-        }
-
-        if (date > days)
-        {
-            for (int i = 0; i < linesAmt; i++)
-            {
-                commands[i].remainingTime = 0;
-            }
-            break;
-        }
-    }
-    printf("\n------------------------------------\n");
-    float count[linesAmt];
-    for (int i = 0; i < linesAmt; i++)
-    {
-        count[i] = commands[i].counter;
-        printf("%d\t", commands[i].counter);
-        printf("%s\n", commands[i].command);
-    }
-    int indexOfMaxProcess = find_max_value(count, linesAmt);
-
-    printf("\n------------------------------------\n");
-    printf("%s %i %i", commands[indexOfMaxProcess].command, amtProcesses, maxQueue);
-    printf("\n------------------------------------\n");
-}
-int main(int argc, char **argv)
-{
-    int month;
-    if (argc != 4)
-    {
-        printf("%s expected 3 arguments, instead got %d\n", argv[0], argc - 1);
-    }
-    else if (!isdigit(*argv[1]))
-        month = monthNametoInt(argv[1]);
     else
     {
-        month = atoi(argv[1]);
-        if (rangeChecker(month, 0, 11) != 0)
+        const char *months[12] = {"jan", "feb", "mar", "apr", "may",
+                                  "jun", "jul", "aug", "sep", "oct", "nov", "dec"};
+
+        for (int i = 0; i < 12; i++)
         {
-            printf("%d INVALID MONTH", month);
-            exit(EXIT_FAILURE);
+            if (strcmp(months[i], month) == 0)
+            { // Compares whether month match with any months array item
+                num = i;
+                return num;
+            }
         }
     }
-    char *cronFile = argv[2];
-    char *estFile = argv[3];
+    fprintf(stderr, "Month is an invalid input\n");
+    exit(EXIT_FAILURE);
+}
 
-    estimateCron(month, cronFile, estFile);
+int toInteger(char *value)
+{
+    int num;
+    if (isnumber(*value))
+    {
+        num = atoi(value);
+        return num;
+    }
+    else
+    {
+        fprintf(stderr, "Value %s is an invalid input\n", value);
+        exit(EXIT_FAILURE);
+    }
+}
 
-    return 0;
+void reportError(struct Crontab crontab_data[MAX_COMMANDS], int cronSize)
+{
+
+    for (int i = 0; i < cronSize; i++)
+    {
+        // reporting errors on minute in crontab,
+        if (strcmp(crontab_data[i].minute, "*") != 0)
+        { // if minute is not * -->
+            if (atoi(crontab_data[i].minute) < 0 || atoi(crontab_data[i].minute) > 59)
+            { // check if its < 0 or > 59, if yes report error and exit
+                fprintf(stderr, "Minute provided is out of scope\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // reporting errors on hour in crontab
+        if (strcmp(crontab_data[i].hour, "*") != 0)
+        { // if hour is not * -->
+            if (atoi(crontab_data[i].hour) < 0 || atoi(crontab_data[i].hour) > 23)
+            { // check if its <0 or > 23, if yes report error and exit
+                fprintf(stderr, "Hour provided is out of scope\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // reporting errors on date in crontab
+        if (strcmp(crontab_data[i].day, "*") != 0)
+        { // if date is not * -->
+
+            if (strcmp(crontab_data[i].month, "*") == 0)
+            { // if month is equals to * report generic error
+                if (atoi(crontab_data[i].day) < 0 || atoi(crontab_data[i].day) > 31)
+                { // date < 0 or date > 31 then exit and report error
+                    fprintf(stderr, "Date provided is out of scope\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            else if (strcmp(crontab_data[i].month, "*") != 0)
+            { // and if the month provided is also not * -->
+                int currentMonth = monthToInt(crontab_data[i].month);
+                int maxDay = daysOfMonth(currentMonth);
+                // report error accordingly to the specified month
+                if (atoi(crontab_data[i].day) < 0 || atoi(crontab_data[i].day) > maxDay)
+                { // if the date provided is < 0 or is larger than the max date for the provide month, report error and exit
+                    fprintf(stderr, "Date provided is out of scope\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+        }
+
+        // reporting errors on month in crontab
+        if (strcmp(crontab_data[i].month, "*") != 0)
+        { // if day is not * -->
+            int currentMonth = monthToInt(crontab_data[i].month);
+            if (currentMonth < 0 || currentMonth > 11)
+            { // if month is < 0 or > 11, report error and exit
+                fprintf(stderr, "Month provided is out of scope\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // reporting errors on day in crontab
+        if (strcmp(crontab_data[i].date, "*") != 0)
+        { // if dayis not * -->
+            int currentDay = dayToInt(crontab_data[i].date);
+            if (currentDay < 0 || currentDay > 6)
+            { // if day is < 0 or > 6, report error and exit
+                fprintf(stderr, "Day provided is out of scope\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+}
+
+int started(int month, struct Crontab crontab_data[MAX_COMMANDS], int i, int min)
+{
+    // returns 0 if the command provided started in the minute that we are looping through
+    int hour = (min / 60) % 24;              // remainder of total min and 24 will give the current hour
+    int currentMin = (min % (24 * 60)) % 60; // remainder of min / total min in day and 60 wil give what minute we are iterating through
+    int date = (min / (24 * 60)) + 1;
+
+    // if crontab month is equals to month provided or *
+    if (monthToInt(crontab_data[i].month) == month || strcmp(crontab_data[i].month, "*") == 0)
+    {
+        // if crontab day is equals to day we are looping through
+        if (atoi(crontab_data[i].day) == date || strcmp(crontab_data[i].day, "*") == 0)
+        {
+            // if crontab hour is equals to the hour we are looping through
+            if (atoi(crontab_data[i].hour) == hour || strcmp(crontab_data[i].hour, "*") == 0)
+            {
+                // if crontab minute is equals to the minute we are looping through
+                if (atoi(crontab_data[i].minute) == currentMin || strcmp(crontab_data[i].minute, "*") == 0)
+                {
+                    return 0;
+                }
+            }
+        }
+    }
+    return 1;
+}
+
+void estimatecron(char *month, FILE *crontab_file, FILE *estimates_file)
+{
+    int maxCommand = 0;     // max command invoked at any particular time
+    int invokedCommand = 0; // total invoked command in the month
+    int nrunning = 0;       // keeps track of the amount of command running while looping through every minute
+    int cmdMonth = monthToInt(month);
+    int processPointer = 0; // pointer to keep track of where we are in the Process array, allows us to append to end of array
+    int commandPointer = 0; // pointer to keep track of the end index in the Commands array, allows us to append to end of array
+
+    // reading files and storing into arrays of structs
+    struct Crontab crontab_data[MAX_COMMANDS];
+    struct Estimate est_data[MAX_COMMANDS];
+    int estSize = fileProcessEstimate(estimates_file, est_data);
+    int cronSize = fileProcessCron(crontab_file, crontab_data);
+    reportError(crontab_data, cronSize);
+
+    for (int n = 0; n < estSize; n++)
+    {
+        printf("command: %s, min: %s \n", est_data[n].command, est_data[n].min);
+    }
+
+    for (int m = 0; m < estSize; m++)
+    {
+        printf(" min: %s , hour: %s, day: %s, month: %s, date: %s, command: %s\n",
+               crontab_data[m].minute, crontab_data[m].hour, crontab_data[m].day, crontab_data[m].month, crontab_data[m].date, crontab_data[m].command);
+    }
+
+    struct Process
+    {
+        char name[41];  // keeps track of no of commands running during the same process
+        int finishTime; // timer for the process
+    } process[MAX_COMMANDS];
+
+    struct Commands
+    {
+        char name[41]; // keeps track of name of commands
+        int ninvoked;  // keeps track of number of times it was invoked
+    } commands[MAX_COMMANDS];
+
+    for (int i = 0; i < MAX_COMMANDS; i++)
+    {
+        // initialised all comamnds invoked time and finish time to 0, -1
+        commands[i].ninvoked = 0;
+        process[i].finishTime = -1;
+    }
+
+    // iterate through every minute in the provided and month and log commands
+    int minInMonth = (60 * 24) * daysOfMonth(cmdMonth); // no of minutes in the given month
+    for (int min = 0; min <= minInMonth; min++)
+    {
+        // determine if process finishes at the minute we are iterating through
+        for (int n = 0; n < processPointer; n++)
+        {
+            if (process[n].finishTime > 0)
+            {
+                process[n].finishTime--; // decrement every process timer
+            }
+
+            else if (process[n].finishTime == 0)
+            {
+                nrunning--; // if a process is finished, decrement nrunning
+            }
+        }
+
+        // testing if a command starts in that minute
+        for (int i = 0; i < cronSize; i++)
+        {
+            /*- as we are looping through the minutes, determine if a command starts in that minute,
+             - if yes, increment nrunning and command invoked, then see if nrunning is > maxcommand running at one time and update if needed
+             - then find the command that just started and match it with appropriate command in estimate file, store the execution time of that command
+             and its name to process array
+             - check if the command that just started already exist in the command array, if yes then increment ninvoked of that command, if not then
+             add it to command array and increment the pointer to end of array
+
+             as we are looping through the minutes, loop through process array in order to decrement
+
+            */
+
+            if (started(cmdMonth, crontab_data, i, min) == 0)
+            { // if a command start during this minute increments nrunning and invoked commands
+                invokedCommand++;
+                nrunning++;
+                printf("Command executed: %s at: %s:%s:%s:%s:%s\n",
+                       crontab_data[i].command, crontab_data[i].minute, crontab_data[i].hour, crontab_data[i].day, crontab_data[i].month, crontab_data[i].date);
+
+                if (nrunning > maxCommand)
+                {
+                    maxCommand = nrunning;
+                }
+            }
+
+            for (int j = 0; j < estSize; j++)
+            {
+                if (strcmp(est_data[j].command, crontab_data[i].command) == 0) // finding the command that just started and add its execution time to process array
+                {
+                    int minRunning = toInteger(est_data[j].min);
+                    strcpy(process[processPointer].name, crontab_data[i].command);
+                    process[processPointer].finishTime = minRunning;
+                    processPointer++;
+                }
+            }
+
+            for (int k = 0; k < commandPointer; k++)
+            {
+                // if the command already exist in command array, increment no time it was invoked
+                if (strcmp(crontab_data[k].command, commands[k].name) == 0)
+                {
+                    commands[commandPointer].ninvoked++;
+                }
+                // if command did not already exist, add it to commands array
+                else
+                {
+                    strcpy(commands[commandPointer].name, crontab_data[i].command);
+                    commands[commandPointer].ninvoked++;
+                    commandPointer++;
+                }
+            }
+        }
+    }
+
+    // determine commands that was called the most
+    int maxInvoked = 0;
+    char maxCommandName[41];
+    for (int i = 0; i < commandPointer; i++)
+    {
+        if (commands[i].ninvoked > maxInvoked)
+        {
+            maxInvoked = commands[i].ninvoked;
+            strcpy(maxCommandName, commands[i].name);
+        }
+    }
+
+    printf("Number of commands invoked: %i, most frequently executed command: %s, max commands running: %i\n", invokedCommand, maxCommandName, maxCommand);
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc != 4)
+    {
+        fprintf(stderr, "4 arguments required\n");
+        exit(EXIT_FAILURE);
+    }
+    char *month = argv[1];
+    FILE *crontab = openfile(argv[2]);
+    FILE *estimate = openfile(argv[3]);
+
+    estimatecron(month, crontab, estimate);
 }

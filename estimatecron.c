@@ -7,7 +7,7 @@
 
 #define max_minutes 60
 #define max_hours 24
-#define max_days 7
+#define max_days_in_week 7
 #define month_amt 12
 #define current_year 2022
 #define line_size 100
@@ -82,34 +82,19 @@ int monthNametoInt(char *month)
 
 char dayNametoInt(char *string)
 {
-    char *temp;
+    char *daysInWeek[max_days_in_week] = {"sun", "mon", "tue", "wed",
+                                          "thu", "fri", "sat"};
     for (int i = 0; string[i] != '\0'; i++)
     {
         string[i] = tolower(string[i]);
     }
-
-    if (strcmp(string, "sun") == 0)
-        string = "0";
-
-    if (strcmp(string, "mon") == 0)
-        string = "1";
-
-    if (strcmp(string, "tue") == 0)
-        string = "2";
-
-    if (strcmp(string, "wed") == 0)
-        string = "3";
-
-    if (strcmp(string, "thu") == 0)
-        string = "4";
-
-    if (strcmp(string, "fri") == 0)
-        string = "5";
-
-    if (strcmp(string, "sat") == 0)
-        string = "6";
-
-    return strtol(string, &temp, 10);
+    for (int i = 0; i < max_days_in_week; i++)
+    {
+        if (strcmp(string, daysInWeek[i]) == 0)
+            return i;
+    }
+    printf("%s INVALID DAY\n", string);
+    exit(EXIT_FAILURE);
 }
 
 int find_max_value(float array[], int length)
@@ -138,11 +123,11 @@ int getDayOfWeek(int month, int date)
     int day = 0;
     int year = current_year;
     month += 1;
-    int year_temp = year - (14 - month) / 12;
-    int x = year_temp + year_temp / 4 - year_temp / 100 + year_temp / 400;
-    int month_temp = month + 12 * ((14 - month) / 12) - 2;
-    day = (date + x + 31 * month_temp / 12) % 7;
-    return day;
+    int yTemp = year - (14 - month) / 12;
+    int x = yTemp + yTemp / 4 - yTemp / 100 + yTemp / 400;
+    int mTemp = month + 12 * ((14 - month) / 12) - 2;
+    return (date + x + 31 * mTemp / 12) % 7;
+    ;
 }
 // Function to return the amount of days in given month
 int daysInMonthAmt(int month)
@@ -195,27 +180,20 @@ int parseEstimate(char *filename, char *stringCommand)
     char *buffer = (char *)malloc(sizeof(char) * (size + 1));
     while (fgets(buffer, (size + 1), pFile) != NULL)
     {
-        char *token;
-        char *temp;
-        char *temp2;
-        char *strNum;
+        char command[command_size];
+        char duration[command_size];
+        char line[line_size];
+        int columns;
+        long num;
 
-        temp = buffer;
-        if (buffer[0] == '#')
-            continue;
-
-        token = strtok(temp, " ");
-        temp = NULL;
-        if (strncmp(stringCommand, token, sizeof(&token)) == 0)
-        {
-
-            token = strtok(NULL, " ");
-            long int num = strtol(token, &temp2, 10);
-            return num;
-        }
-        token = strtok(NULL, " ");
+        columns = sscanf(line, "%s %s", command, duration);
+        if (line[0] != '#' && strcmp(stringCommand, command) == 0)
+            num = strtol(duration, NULL, 10);
+        int minutes = num;
+        return minutes;
     }
-    return 0;
+    printf("%s INVALID ESTIMATE FILE\n", filename);
+    exit(EXIT_FAILURE);
 }
 
 void estimateCron(int month, char *cronFile, char *estFile)
@@ -244,26 +222,25 @@ void estimateCron(int month, char *cronFile, char *estFile)
         char strMonth[command_size];
         char strDay[command_size];
         char strCommand[command_size];
-        char *temp2;
 
         columns = sscanf(buffer, "%s %s %s %s %s %s", strMin, strHr, strDate, strMonth, strDay, strCommand);
         if (columns == 6 && buffer[0] != '#')
         {
             strcpy(commands[i].command, strCommand);
             if (strcmp(strMin, "*") != 0)
-                commands[i].min = strtol(strMin, &temp2, 10);
+                commands[i].min = strtol(strMin, NULL, 10);
             else
                 commands[i].min = -1;
             if (strcmp(strHr, "*") != 0)
-                commands[i].hr = strtol(strHr, &temp2, 10);
+                commands[i].hr = strtol(strHr, NULL, 10);
             else
                 commands[i].hr = -1;
             if (strcmp(strDate, "*") != 0)
-                commands[i].day = strtol(strDate, &temp2, 10);
+                commands[i].day = strtol(strDate, NULL, 10);
             else
                 commands[i].day = 0;
             if (strcmp(strMonth, "*") != 0)
-                commands[i].month = strtol(strMonth, &temp2, 10);
+                commands[i].month = strtol(strMonth, NULL, 10);
             else
                 commands[i].month = -1;
             if (strcmp(strDay, "*") != 0)
@@ -313,7 +290,7 @@ void estimateCron(int month, char *cronFile, char *estFile)
             hour = 0;
             minute = 0;
         }
-        if (weekday == max_days)
+        if (weekday == max_days_in_week)
         {
             weekday = 0;
         }
