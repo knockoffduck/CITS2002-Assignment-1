@@ -49,6 +49,102 @@ void green()
     printf("\033[0;32m");
 }
 
+void crontabValidator(char *file)
+{
+    FILE *pFile = fopen(file, "r");
+
+    if (!pFile)
+    {
+        red();
+        printf("error loading file '%s'\n", file);
+        reset();
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[line_size];
+    int columns;
+
+    while (fgets(buffer, sizeof buffer, pFile) != NULL)
+    {
+        char strMin[command_size];
+        char strHr[command_size];
+        char strDate[command_size];
+        char strMonth[command_size];
+        char strDay[command_size];
+        char strCommand[command_size];
+
+        if (buffer[0] != '#')
+        {
+            columns = sscanf(buffer, "%s %s %s %s %s %s", strMin, strHr, strDate, strMonth, strDay, strCommand);
+            if (columns != 6)
+            {
+                red();
+                printf("error validating file '%s'\n", file);
+                printf("incorrect crontab format, expected 6 columns instead got: %d\n", columns);
+                reset();
+                exit(EXIT_FAILURE);
+            }
+            else if (strcmp(strMin, "*") == 0 &&
+                     strcmp(strHr, "*") == 0 &&
+                     strcmp(strDate, "*") == 0 &&
+                     strcmp(strMonth, "*") == 0 &&
+                     strcmp(strDay, "*") == 0)
+            {
+                red();
+                printf("error validating file '%s'\n", file);
+                printf("incorrect crontab format \n");
+                printf("all values are empty for command: %s\n", strCommand);
+                reset();
+                exit(EXIT_FAILURE);
+            }
+            else if (strcmp(strMin, "*") == 0 && strcmp(strHr, "*") == 0)
+            {
+                red();
+                printf("error validating file '%s'\n", file);
+                printf("incorrect crontab format \n");
+                printf("minute or hour value must be present for command: %s\n", strCommand);
+                reset();
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+}
+
+void estfileValidator(char *file)
+{
+    FILE *pFile = fopen(file, "r");
+
+    if (!pFile)
+    {
+        red();
+        printf("error loading file '%s'\n", file);
+        reset();
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[line_size];
+    int columns;
+
+    while (fgets(buffer, sizeof buffer, pFile) != NULL)
+    {
+        char strCommand[command_size];
+        char strDuration[command_size];
+
+        if (buffer[0] != '#')
+        {
+            columns = sscanf(buffer, "%s %s ", strCommand, strDuration);
+            if (columns != 2)
+            {
+                red();
+                printf("error validating file '%s'\n", file);
+                printf("incorrect estfile format, expected 2 columns instead got: %d\n", columns);
+                reset();
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+}
+
 int rangeChecker(int num, int min, int max)
 {
     if ((num - min) * (num - max) <= 0)
@@ -57,7 +153,9 @@ int rangeChecker(int num, int min, int max)
     }
     else
     {
+        red();
         printf("%d is an invalid month\n", num);
+        reset();
         exit(EXIT_FAILURE);
     }
 }
@@ -75,8 +173,9 @@ int monthNametoInt(char *month)
         if (strcmp(month, months[i]) == 0)
             return i;
     }
-
+    red();
     printf("%s INVALID MONTH\n", month);
+    reset();
     exit(EXIT_FAILURE);
 }
 
@@ -93,6 +192,7 @@ char dayNametoInt(char *string)
         if (strcmp(string, daysInWeek[i]) == 0)
             return i;
     }
+    red();
     printf("%s INVALID DAY\n", string);
     exit(EXIT_FAILURE);
 }
@@ -141,23 +241,20 @@ int daysInMonthAmt(int month)
 int amtOfLines(char *filename)
 {
     FILE *pFile = fopen(filename, "r");
-    int lines = 0;
-    char *temp;
     if (!pFile)
     {
-        printf("error loading file");
+        red();
+        printf("error loading file: %s", filename);
         exit(EXIT_FAILURE);
     }
-    fseek(pFile, 0, SEEK_END);
-    int size = ftell(pFile);
-    rewind(pFile);
-    char *buffer = (char *)malloc(sizeof(char) * (size + 1));
 
-    while (fgets(buffer, (size + 1), pFile) != NULL)
+    int lines = 0;
+    char buffer[line_size];
+
+    while (fgets(buffer, sizeof(buffer), pFile) != NULL)
     {
-        if (buffer[0] == '#')
-            continue;
-        lines++;
+        if (buffer[0] != '#')
+            lines++;
     }
     return lines;
 }
@@ -168,17 +265,13 @@ int parseEstimate(char *filename, char *stringCommand)
 
     if (!pFile)
     {
+        red();
         printf("error loading file '%s'\n", filename);
         exit(EXIT_FAILURE);
     }
-    fseek(pFile, 0, SEEK_END);
 
-    int size = ftell(pFile);
-
-    rewind(pFile);
-
-    char *buffer = (char *)malloc(sizeof(char) * (size + 1));
-    while (fgets(buffer, (size + 1), pFile) != NULL)
+    char buffer[line_size];
+    while (fgets(buffer, sizeof(buffer), pFile) != NULL)
     {
         char command[command_size];
         char duration[command_size];
@@ -188,19 +281,18 @@ int parseEstimate(char *filename, char *stringCommand)
 
         columns = sscanf(line, "%s %s", command, duration);
         if (line[0] != '#' && strcmp(stringCommand, command) == 0)
+
             num = strtol(duration, NULL, 10);
         int minutes = num;
         return minutes;
     }
     printf("%s INVALID ESTIMATE FILE\n", filename);
+    printf("Could not match command from crontab to estfile\n");
     exit(EXIT_FAILURE);
 }
 
 void estimateCron(int month, char *cronFile, char *estFile)
 {
-    int linesAmt = amtOfLines(cronFile);
-    Command commands[linesAmt];
-    Execute *status = (Execute *)malloc(sizeof *status);
 
     FILE *pFile = fopen(cronFile, "r");
 
@@ -209,6 +301,9 @@ void estimateCron(int month, char *cronFile, char *estFile)
         printf("error loading file '%s'\n", cronFile);
         exit(EXIT_FAILURE);
     }
+    int linesAmt = amtOfLines(cronFile);
+    Command commands[linesAmt];
+    Execute *status = (Execute *)malloc(sizeof *status);
 
     char buffer[line_size];
 
@@ -364,13 +459,17 @@ void estimateCron(int month, char *cronFile, char *estFile)
     printf("\n------------------------------------\n");
     printf("%s %i %i", commands[indexOfMaxProcess].command, amtProcesses, maxQueue);
     printf("\n------------------------------------\n");
+    free(status);
 }
 int main(int argc, char **argv)
 {
     int month;
     if (argc != 4)
     {
-        printf("%s expected 3 arguments, instead got %d\n", argv[0], argc - 1);
+        red();
+        printf("expected 3 arguments, instead got %d\n", argc - 1);
+        reset();
+        exit(EXIT_FAILURE);
     }
     else if (!isdigit(*argv[1]))
         month = monthNametoInt(argv[1]);
@@ -379,12 +478,17 @@ int main(int argc, char **argv)
         month = atoi(argv[1]);
         if (rangeChecker(month, 0, 11) != 0)
         {
+            red();
             printf("%d INVALID MONTH", month);
+            reset();
             exit(EXIT_FAILURE);
         }
     }
     char *cronFile = argv[2];
     char *estFile = argv[3];
+
+    crontabValidator(cronFile);
+    estfileValidator(estFile);
 
     estimateCron(month, cronFile, estFile);
 
