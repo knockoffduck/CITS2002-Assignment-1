@@ -1,5 +1,5 @@
 # execute a command at 3AM every day
-4 12 * * *      daily-backup
+0 3 * * *      daily-backup
 #
 # execute a command at 4:15AM every Sunday
 15 4 * * sun   weekly-backup
@@ -12,4 +12,3 @@
 #
 # mail out a monthly newsletter
 0 2 1 * *      send-monthly-newsletter
-# execute a command at 3AM every day

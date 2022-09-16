@@ -25,7 +25,8 @@ typedef struct
     int dayOfWeek;
     char command[command_size + 1];
     int duration; // Specifies the duration of the command
-    int counter;  // Specifies the amount of times the command was executed
+    int counter;
+    char test[command_size]; // Specifies the amount of times the command was executed
 } Command;
 
 typedef struct
@@ -51,8 +52,8 @@ void green()
     printf("\033[0;32m");
 }
 
-void crontabValidator(char *file)
-{ // Function validates and checks the crontab file for any errors
+FILE *openFile(char *file) 
+{   // Function to open the file, assign a pointer to the file and raise an error if unable to open the file
     FILE *pFile = fopen(file, "r");
 
     if (!pFile)
@@ -62,7 +63,12 @@ void crontabValidator(char *file)
         reset();
         exit(EXIT_FAILURE);
     }
+    return pFile;
+}
 
+void crontabValidator(char *file)
+{ // Function validates and checks the crontab file for any errors
+    FILE *pFile = openFile(file);
     char buffer[line_size];
     int columns;
 
@@ -114,15 +120,7 @@ void crontabValidator(char *file)
 
 void estFileValidator(char *file)
 { // Function validates and checks the estimate file for any errors
-    FILE *pFile = fopen(file, "r");
-
-    if (!pFile) // checks whether the program is able to open the file, otherwise exit
-    {
-        red();
-        printf("error loading file '%s'\n", file);
-        reset();
-        exit(EXIT_FAILURE);
-    }
+    FILE *pFile = openFile(file);
 
     char buffer[line_size];
     int columns;
@@ -233,13 +231,7 @@ int daysInMonthAmt(int month)
 
 int amtOfLines(char *filename)
 { // Function to return the amount of lines in crontab file
-    FILE *pFile = fopen(filename, "r");
-    if (!pFile)
-    {
-        red();
-        printf("error loading file: %s", filename);
-        exit(EXIT_FAILURE);
-    }
+    FILE *pFile = openFile(filename);
 
     int lines = 0;
     char buffer[line_size];
@@ -254,30 +246,24 @@ int amtOfLines(char *filename)
 
 int parseEstimate(char *filename, char *stringCommand)
 { // Function to return the duration of the specified command from the estimates file
-    FILE *pFile = fopen(filename, "r");
-
-    if (!pFile)
-    {
-        red();
-        printf("error loading file '%s'\n", filename);
-        exit(EXIT_FAILURE);
-    }
+    FILE *pFile = openFile(filename);
+    int columns;
 
     char buffer[line_size];
     while (fgets(buffer, sizeof(buffer), pFile) != NULL)
     { // loop through each line in the file
         char command[command_size];
         char duration[command_size];
-        char line[line_size];
-        int columns;
-        long num;
 
-        columns = sscanf(line, "%s %s", command, duration); // parse the strings from the two columns separated by whitespace into strings variables
-        if (line[0] != '#' && strcmp(stringCommand, command) == 0)
+        if (buffer[0] != '#')
+        {
+            columns = sscanf(buffer, "%s %s", command, duration); // parse the strings from the two columns separated by whitespace into strings variables
+            if (strcmp(command, stringCommand) == 0)
             // checks whether the line is a comment line and the command parameter matches the command in the line, then return the duration converted from string to int
-            num = strtol(duration, NULL, 10);
-        int minutes = num;
-        return minutes;
+            {
+                return atoi(duration);
+            }
+        }
     }
     printf("%s INVALID ESTIMATE FILE\n", filename); // if the function hasn't returned a value then raise error
     printf("Could not match command from crontab to estFile\n");
@@ -287,13 +273,7 @@ int parseEstimate(char *filename, char *stringCommand)
 void estimateCron(int month, char *cronFile, char *estFile)
 {
     // primary function to execute and simulate the commands by incrementing each minute in a month given the month, cronFile name and estimate filename parameters
-    FILE *pFile = fopen(cronFile, "r");
-
-    if (!pFile)
-    {
-        printf("error loading file '%s'\n", cronFile);
-        exit(EXIT_FAILURE);
-    }
+    FILE *pFile = openFile(cronFile);
     int linesAmt = amtOfLines(cronFile);
     Command commands[linesAmt];
     Execute *status = (Execute *)malloc(sizeof *status); // allocate memory to the status struct so the length of the struct can be dynamic to accommodate for the amount of commands executed
@@ -316,19 +296,19 @@ void estimateCron(int month, char *cronFile, char *estFile)
         {                                            // skips comment lines where the first character in the line is a '#'
             strcpy(commands[i].command, strCommand); // copy the command from the line into the commands struct
             if (strcmp(strMin, "*") != 0)            // checks whether the column is empty and copies the integer value converted from string to the specific commands struct field otherwise use -1 or 0 to represent an empty value
-                commands[i].min = strtol(strMin, NULL, 10);
+                commands[i].min = atoi(strMin);
             else
-                commands[i].min = -1;
+                commands[i].min = 0;
             if (strcmp(strHr, "*") != 0)
-                commands[i].hr = strtol(strHr, NULL, 10);
+                commands[i].hr = atoi(strHr);
             else
                 commands[i].hr = -1;
             if (strcmp(strDate, "*") != 0)
-                commands[i].day = strtol(strDate, NULL, 10);
+                commands[i].day = atoi(strDate);
             else
                 commands[i].day = 0;
             if (strcmp(strMonth, "*") != 0)
-                commands[i].month = strtol(strMonth, NULL, 10);
+                commands[i].month = atoi(strMonth);
             else
                 commands[i].month = -1;
             if (strcmp(strDay, "*") != 0)
@@ -385,7 +365,7 @@ void estimateCron(int month, char *cronFile, char *estFile)
             if (queue > maxQueue) // checks whether the queue is the highest its ever been then replace the highest queue with the current queue
                 maxQueue = queue;
 
-            if ((minute == commands[i].min || commands[i].min == -1) &&
+            if (minute == commands[i].min &&
                 (hour == commands[i].hr || commands[i].hr == -1) &&
                 (date == commands[i].day || commands[i].day == 0) &&
                 (month == commands[i].month || commands[i].month == -1) &&
@@ -397,7 +377,7 @@ void estimateCron(int month, char *cronFile, char *estFile)
                 status[amtProcesses].remainingTime = commands[i].duration;
                 commands[i].counter++;
                 green();
-                printf("@ %02d:%02d\t%02d/%02d\tinvoke\t(pid=%d, running=%d)\t\t%s\n", hour, minute, date, month, amtProcesses, queue, commands[i].command);
+                printf("@ %02d:%02d\t%02d/%02d\tinvoke\t\t(pid=%d, running=%d)\t%s\n", hour, minute, date, month, amtProcesses, queue, commands[i].command);
                 reset();
                 amtProcesses++;
             }
@@ -422,7 +402,7 @@ void estimateCron(int month, char *cronFile, char *estFile)
         if (date > days) // check whether it is the end of the month then stop the loop
             break;
     }
-    printf("\n------------------------------------\n");
+    printf("------------------------------------\n");
     float count[linesAmt];
     for (int i = 0; i < linesAmt; i++)
     { // loop through the commands and print the amount of times the command has executed
@@ -432,7 +412,7 @@ void estimateCron(int month, char *cronFile, char *estFile)
     }
     int indexOfMaxProcess = getMaxValue(count, linesAmt);
 
-    printf("\n------------------------------------\n");
+    printf("------------------------------------\n");
     printf("%s %i %i\n", commands[indexOfMaxProcess].command, amtProcesses, maxQueue); // print the final assessed output
     free(status);                                                                      // free the memory for the status struct
 }
@@ -450,7 +430,7 @@ int main(int argc, char **argv)
         month = monthNametoInt(argv[1]);
     else
     {
-        month = strtol(argv[1], NULL, 10);
+        month = atoi(argv[1]);
         if (rangeChecker(month, 0, 11) != 0)
         { // check whether the month is a valid month
             red();
