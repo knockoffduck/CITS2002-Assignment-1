@@ -1,6 +1,6 @@
 
-// Project 1 for CITS2002 2022
-// Student1: 23454661
+//  CITS2002 Project 1 2022
+//  Student1:   23454661   FATHUROHMAN   DAFFA
 
 #include <stdio.h>
 #include <stdlib.h>
