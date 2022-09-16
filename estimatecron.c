@@ -129,6 +129,7 @@ void estFileValidator(char *file)
     {
         char strCommand[command_size]; // string variables are created to store each string from the line
         char strDuration[command_size];
+        if (isspace(buffer[0])) continue;
 
         if (buffer[0] != '#') // skips comment lines where the first character in the line is a '#'
         {
@@ -250,8 +251,10 @@ int parseEstimate(char *filename, char *stringCommand)
     int columns;
 
     char buffer[line_size];
+    
     while (fgets(buffer, sizeof(buffer), pFile) != NULL)
     { // loop through each line in the file
+        if (isspace(buffer[0])) continue;
         char command[command_size];
         char duration[command_size];
 
